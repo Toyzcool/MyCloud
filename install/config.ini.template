@@ -1,0 +1,64 @@
+[server]
+host = 192.168.5.1
+share = SHARE
+username = admin
+; password is not stored here: Keychain or nsmb.conf (managed by the installer)
+; sentinel_uuid is written by the installer; do not edit it by hand.
+;sentinel_uuid =
+
+[backup]
+; base directory on the NAS share where backups are stored (relative to the
+; share root). Default: MyCloud -> SHARE/MyCloud/{data,.trash,last_sync.json}.
+; Must be a relative path: no leading '/', no '..', no backslashes; "." is not
+; allowed. CJK characters and spaces are fine. Leading/trailing slashes are
+; stripped. Changing this leaves data at the old location untouched (orphaned).
+;dest_rel = MyCloud
+; one local file or folder to back up per line (~ is expanded)
+folders =
+    ~/Documents
+    ~/Desktop
+; rsync exclude patterns, one per line
+; (built-in defaults: .DS_Store .Trashes .TemporaryItems .localized ._*
+;  *.tmp ~$* node_modules .git)
+exclude =
+    *.photoslibrary
+retention_days = 30
+trash_max_gb = 50
+hot_interval = 30
+full_interval = 900
+max_delete_files = 200
+max_delete_pct = 20
+offline_notify_hours = 24
+watch_mode = auto        ; auto | kqueue | scan
+; iCloud Drive dataless (cloud-only) files cannot be handed to rsync directly.
+;   skip     (default) leave dataless files out of the backup and list them in
+;            `mycloudctl status` so you can download them yourself if wanted.
+;   download materialize each file (download), back it up, then evict it again
+;            so the 45GB library never all lands on the local disk at once.
+icloud_policy = skip     ; skip | download
+; When icloud_policy = download, evict (re-cloud) only the files this daemon
+; downloaded, once they are backed up. Requires `brctl evict`; where that is
+; unavailable the files are left downloaded and a note appears in status.
+icloud_evict_after_backup = true   ; true | false
+
+; --- transfer performance (PLAN 15 P0) -------------------------------------
+; Parallel rsync upload workers (1-16). Per-file SMB round-trips dominate on a
+; router NAS, so parallel streams help -- but only until the server saturates.
+; MEASURED on the target router (2026-07-28): 2 workers sustained 4.8 files/s
+; with zero disconnects, while 4 workers pushed the SMB server into rsync's own
+; 180s I/O timeout (rc=20), and the resulting kill/remount/retry cycle dropped
+; EFFECTIVE throughput to 0.7 files/s -- worse than a single stream. Raise this
+; only if you measure a genuine gain; if you see "rsync error: poll: timeout" in
+; the log, lower it.
+upload_concurrency = 2
+; Write NEW files (no mirror copy yet) with --inplace, skipping the temp+rename
+; round-trip per file. Only ever applied where nothing exists to overwrite;
+; changed files always keep the trash-versioning (-b) path.
+rsync_inplace = true
+; Skip setting each file's modification time on the NAS (one SET_INFO
+; round-trip saved per file). The backup's truth lives in the local manifest,
+; so mirrored mtimes are cosmetic; files on the NAS then show their BACKUP
+; time instead of the original mtime. NOTE: after running with this on,
+; switching it back off makes the next weekly deep verify see every already-
+; uploaded file as drifted and re-upload it once (harmless but slow).
+rsync_no_times = true

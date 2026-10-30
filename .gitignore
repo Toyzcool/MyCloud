@@ -1,0 +1,10 @@
+.DS_Store
+__pycache__/
+*.pyc
+dist/
+gui/.build/
+gui/build/
+*.db
+*.db-wal
+*.db-shm
+.claude/settings.local.json
